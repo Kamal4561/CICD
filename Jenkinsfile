@@ -20,25 +20,27 @@ pipeline {
       }
     }
 
-    stage('Build Docker Image') {
-      steps {
-        script {
-          docker.build("${IMAGE_NAME}")
-        }
-      }
+  stage('Build Docker Image') {
+  steps {
+    script {
+      def image = docker.build("foodapp/food-app") // build with repo name only
+      image.tag("${IMAGE_NAME}") // tag with full registry path
     }
+  }
+}
 
-    stage('Push to Harbor') {
-      steps {
-        withCredentials([usernamePassword(credentialsId: 'harbor-id', usernameVariable: 'USER', passwordVariable: 'PASS')]) {
-          script {
-            docker.withRegistry("${REGISTRY_URL}", 'harbor-id') {
-              docker.image("${IMAGE_NAME}").push("latest")
-            }
-          }
+stage('Push to Harbor') {
+  steps {
+    withCredentials([usernamePassword(credentialsId: 'harbor-id', usernameVariable: 'USER', passwordVariable: 'PASS')]) {
+      script {
+        docker.withRegistry("${REGISTRY_URL}", 'harbor-id') {
+          docker.image("${IMAGE_NAME}").push("latest")
         }
       }
     }
+  }
+}
+
 
     stage('Deploy Container') {
       steps {
