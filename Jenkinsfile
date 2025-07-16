@@ -11,7 +11,7 @@ pipeline {
         checkout([$class: 'GitSCM',
           branches: [[name: '*/master']],
           userRemoteConfigs: [[
-            url: 'http://192.168.1.101:7990/scm/cicd/color_web.git',
+            url: 'https://github.com/Kamal4561/CICD.git',
             credentialsId: '23ff5c48-819a-4144-ade8-a1dab123f77a'
           ]]
         ])
