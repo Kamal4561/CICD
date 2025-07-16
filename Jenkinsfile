@@ -1,41 +1,50 @@
 pipeline {
   agent any
+
   environment {
-    IMAGE_NAME = "colorweb/myapp"
-    REGISTRY_URL = "192.168.1.102"
+    IMAGE_NAME = "192.168.1.66:8082/foodapp/food-app"
     SONARQUBE_ENV = "SonarQube"
+    REGISTRY_URL = "http://192.168.1.66:8082"
   }
-    stages {
+
+  stages {
+
     stage('Clone Code') {
       steps {
         checkout([$class: 'GitSCM',
-          branches: [[name: '*/master']],
+          branches: [[name: '*/main']],
           userRemoteConfigs: [[
             url: 'https://github.com/Kamal4561/CICD.git',
-            credentialsId: '23ff5c48-819a-4144-ade8-a1dab123f77a'
+            credentialsId: 'git-creds'
           ]]
         ])
       }
     }
 
-      stage('SonarQube') {
-    steps {
-      withSonarQubeEnv("${SONARQUBE_ENV}") {
-        script {
-          def scannerHome = tool 'SonarScanner'
-          sh """
-            ${scannerHome}/bin/sonar-scanner \
-              -Dsonar.projectKey=COLOR_WEB \
-              -Dsonar.sources=. \
-              -Dsonar.java.binaries=target/ \
-              -Dsonar.host.url=http://192.168.1.102:9001
-          """
+    stage('SonarQube Scan') {
+      steps {
+        withSonarQubeEnv("${SONARQUBE_ENV}") {
+          script {
+            def scannerHome = tool 'SonarScanner'
+            sh """
+              ${scannerHome}/bin/sonar-scanner \
+                -Dsonar.projectKey=FOOD_APP \
+                -Dsonar.sources=. \
+                -Dsonar.host.url=http://192.168.1.66:9000
+            """
+          }
         }
       }
     }
-}
 
- 
+    stage("Quality Gate") {
+      steps {
+        timeout(time: 1, unit: 'MINUTES') {
+          waitForQualityGate abortPipeline: true
+        }
+      }
+    }
+
     stage('Build Docker Image') {
       steps {
         script {
@@ -43,28 +52,27 @@ pipeline {
         }
       }
     }
-       stage('Build and Push Image') {
+
+    stage('Push to Harbor') {
       steps {
-        withCredentials([usernamePassword(credentialsId: 'kamal', usernameVariable: 'USER', passwordVariable: 'PASS')]) {
+        withCredentials([usernamePassword(credentialsId: 'harbor-id', usernameVariable: 'USER', passwordVariable: 'PASS')]) {
           script {
-            docker.withRegistry("http://${REGISTRY_URL}", 'kamal') {
-              docker.build("${IMAGE_NAME}").push("latest")
+            docker.withRegistry("${REGISTRY_URL}", 'harbor-id') {
+              docker.image("${IMAGE_NAME}").push("latest")
             }
           }
         }
       }
     }
 
-  stage('Run Docker Container') {
+    stage('Deploy Container') {
       steps {
         script {
           sh '''
-            # Stop and remove existing container if it exists
-            docker stop myapp || true
-            docker rm myapp || true
+            docker stop food-app || true
+            docker rm food-app || true
 
-            # Run the new container with port mapping
-            docker run -d --name myapp -p 8126:8000 colorweb/myapp:latest
+            docker run -d --name food-app -p 8126:8000 ${IMAGE_NAME}:latest
           '''
         }
       }
