@@ -2,8 +2,9 @@ pipeline {
   agent any
 
   environment {
-    IMAGE_NAME = "192.168.1.66:8082/foodapp/food-app"
-    REGISTRY_URL = "http://192.168.1.66:8082"
+    IMAGE_NAME = "foodapp/food-app"
+    REGISTRY_URL = "192.168.1.66:8082"
+    FULL_IMAGE_NAME = "${REGISTRY_URL}/${IMAGE_NAME}:latest"
   }
 
   stages {
@@ -20,36 +21,36 @@ pipeline {
       }
     }
 
-  stage('Build Docker Image') {
-  steps {
-    script {
-      def image = docker.build("foodapp/food-app") // build with repo name only
-      image.tag("${IMAGE_NAME}") // tag with full registry path
-    }
-  }
-}
-
-stage('Push to Harbor') {
-  steps {
-    withCredentials([usernamePassword(credentialsId: 'harbor-id', usernameVariable: 'USER', passwordVariable: 'PASS')]) {
-      script {
-        docker.withRegistry("${REGISTRY_URL}", 'harbor-id') {
-          docker.image("${IMAGE_NAME}").push("latest")
+    stage('Build Docker Image') {
+      steps {
+        script {
+          docker.build("${IMAGE_NAME}")
         }
       }
     }
-  }
-}
 
+    stage('Tag and Push to Harbor') {
+      steps {
+        withCredentials([usernamePassword(credentialsId: 'harbor-id', usernameVariable: 'USER', passwordVariable: 'PASS')]) {
+          script {
+            sh """
+              echo "$PASS" | docker login ${REGISTRY_URL} -u "$USER" --password-stdin
+              docker tag ${IMAGE_NAME} ${FULL_IMAGE_NAME}
+              docker push ${FULL_IMAGE_NAME}
+            """
+          }
+        }
+      }
+    }
 
     stage('Deploy Container') {
       steps {
         script {
-          sh '''
+          sh """
             docker stop food-app || true
             docker rm food-app || true
-            docker run -d --name food-app -p 8126:8000 ${IMAGE_NAME}:latest
-          '''
+            docker run -d --name food-app -p 8126:8000 ${FULL_IMAGE_NAME}
+          """
         }
       }
     }
